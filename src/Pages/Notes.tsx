@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 // Modal component for file upload
 const Modal = ({ isOpen, onClose, onUpload }: { isOpen: boolean, onClose: () => void, onUpload: (file: File, pdfName: string) => void }) => {
@@ -11,10 +13,11 @@ const Modal = ({ isOpen, onClose, onUpload }: { isOpen: boolean, onClose: () => 
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pdfName && file) {
-      onUpload(file, pdfName);
+      // Call the onUpload function with the file and PDF name
+      await onUpload(file, pdfName);
       onClose(); // Close the modal after submission
     } else {
       alert('Please provide both PDF name and a file.');
@@ -74,7 +77,8 @@ const Modal = ({ isOpen, onClose, onUpload }: { isOpen: boolean, onClose: () => 
 // Notes Component to display uploaded PDFs
 const Notes = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [pdfs, setPdfs] = useState<{ name: string; file: File }[]>([]);
+  const [pdfs, setPdfs] = useState<{ name: string; path: string }[]>([]);
+  const navigate = useNavigate();  // Use `useNavigate` from `react-router-dom`
 
   const openModal = () => {
     setIsModalOpen(true);
@@ -84,15 +88,43 @@ const Notes = () => {
     setIsModalOpen(false);
   };
 
-  const handleFileUpload = (file: File, pdfName: string) => {
-    const newPdf = { name: pdfName, file };
-    setPdfs((prevPdfs) => [...prevPdfs, newPdf]);
+  // Function to handle PDF file upload
+  const handleFileUpload = async (file: File, pdfName: string) => {
+    const formData = new FormData();
+    formData.append('pdf', file);
+    formData.append('pdfName', pdfName);  // Send the PDF name to the backend
+
+    try {
+      // Send the PDF file to the backend
+      const response = await axios.post('http://localhost:5000/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Add the file path and name to the state after successful upload
+      setPdfs((prevPdfs) => [
+        ...prevPdfs,
+        { name: pdfName, path: response.data.pdfPath },  // Store the name and path in the state
+      ]);
+    } catch (error) {
+      alert('Error uploading the PDF');
+      console.error(error);
+    }
   };
 
-  const handlePdfClick = (file: File) => {
-    const fileUrl = URL.createObjectURL(file);
-    window.open(fileUrl, '_blank'); // Open the PDF in a new tab
-  };
+  // Fetch the list of uploaded PDFs from the backend when the component mounts
+  useEffect(() => {
+    const fetchPdfs = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/pdfs');
+        setPdfs(response.data);
+      } catch (error) {
+        console.error('Error fetching PDFs:', error);
+      }
+    };
+    fetchPdfs();
+  }, []);
 
   return (
     <div className="p-6">
@@ -102,7 +134,8 @@ const Notes = () => {
           <div
             key={index}
             className="flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ease-in-out"
-            onClick={() => handlePdfClick(pdf.file)}
+            onClick={() => navigate(`/pdf-viewer/${pdf.name}`)} // Pass only the file name
+            // Navigate to the PDF viewer component
           >
             {/* PDF Icon with Hover Enlarging Effect */}
             <div className="w-16 h-16 flex items-center justify-center mb-1">
@@ -112,7 +145,7 @@ const Notes = () => {
                 className="w-full h-full object-contain transition-transform duration-300 ease-in-out transform hover:scale-110" // Hover effect for enlarging
               />
             </div>
-            <div className="text-xs font-medium text-gray-700 text-center">{pdf.name}</div>
+            <div className="text-xs font-medium text-gray-700 text-center">{pdf.name}</div>  {/* Display the PDF name */}
           </div>
         ))}
       </div>

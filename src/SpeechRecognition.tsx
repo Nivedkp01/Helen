@@ -3,19 +3,20 @@ import React, { useState, useEffect, useRef } from 'react';
 let recognition: any = null;
 if ('webkitSpeechRecognition' in window) {
   recognition = new webkitSpeechRecognition();
-  recognition.continuous = true; // Enable continuous listening
-  recognition.interimResults = true; // Show real-time results as speech is detected
-  recognition.lang = 'en-US'; // Set language to English
-  recognition.maxAlternatives = 10; // Only keep the most confident result
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+  recognition.maxAlternatives = 10;
 }
 
 const SpeechRecognition = ({ onSpeechRecognized }: { onSpeechRecognized: (text: string) => void }) => {
   const [listening, setListening] = useState(false);
-  const [interimText, setInterimText] = useState(''); // Real-time speech text
-  const [spokenText, setSpokenText] = useState(''); // Accumulated spoken text
+  const [interimText, setInterimText] = useState('');
+  const [spokenText, setSpokenText] = useState('');
+  const [showModal, setShowModal] = useState(false); // State for controlling the modal visibility
 
-  // To accumulate the speech
-  const accumulatedTextRef = useRef<string>(''); 
+  const accumulatedTextRef = useRef<string>('');
+  const recognitionActive = useRef<boolean>(false); // Track if recognition is active
 
   useEffect(() => {
     if (!recognition) {
@@ -25,56 +26,73 @@ const SpeechRecognition = ({ onSpeechRecognized }: { onSpeechRecognized: (text: 
 
     recognition.onresult = (event: any) => {
       const speechToText = event.results[event.resultIndex][0].transcript;
-      setInterimText(speechToText); // Real-time speech input
+      setInterimText(speechToText);
 
-      // If it's the final result, add it to the accumulated text
       if (event.results[event.resultIndex].isFinal) {
-        accumulatedTextRef.current += ` ${speechToText}`; // Append final text to accumulated text
+        accumulatedTextRef.current += ` ${speechToText}`;
+        setSpokenText(accumulatedTextRef.current); // Update spoken text with the final result
+        setShowModal(false); // Hide modal when speech recognition is finished
       }
-
-      // Update the state with the full accumulated text
-      setSpokenText(accumulatedTextRef.current);
     };
 
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error', event);
+      setListening(false);
+      recognitionActive.current = false; // Reset state on error
     };
 
-    // Start speech recognition when mouse is pressed
-    const handleMouseDown = () => {
-      recognition.start(); // Start recognition when mouse is pressed
-      setListening(true);  // Indicate listening is in progress
-      setInterimText('');   // Clear interim text on new session
-      accumulatedTextRef.current = ''; // Clear accumulated text on new session
-      setSpokenText(''); // Clear spoken text state
+    // Listen for 'F' key press and release
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'f' || e.key === 'F') && !recognitionActive.current) {
+        recognition.start();
+        recognitionActive.current = true;
+        setListening(true);
+        setInterimText('');
+        accumulatedTextRef.current = '';
+        setSpokenText('');
+        setShowModal(true); // Show the modal when speaking
+      }
     };
 
-    // Stop speech recognition when mouse is released
-    const handleMouseUp = () => {
-      recognition.stop(); // Stop recognition when mouse is released
-      setListening(false); // Indicate recognition has stopped
-
-      // Send the full accumulated text to the parent
-      onSpeechRecognized(accumulatedTextRef.current);
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if ((e.key === 'f' || e.key === 'F') && recognitionActive.current) {
+        recognition.stop();
+        recognitionActive.current = false;
+        setListening(false);
+      }
     };
 
-    window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 
-    // Cleanup event listeners when the component is unmounted
     return () => {
-      window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      recognition.stop(); // Clean up recognition on component unmount
     };
-  }, [recognition, onSpeechRecognized]);
+  }, [recognition]);
+
+  // Trigger callback to parent when `spokenText` is updated
+  useEffect(() => {
+    if (spokenText.trim()) {
+     
+      onSpeechRecognized(spokenText);
+    }
+  }, [spokenText, onSpeechRecognized]);
 
   return (
     <div>
-      <h3>{listening ? 'Listening...' : 'Click & Hold to Speak'}</h3>
-      <p>{interimText}</p> {/* Show real-time speech input */}
+      {/* {showModal && (
+        <div className="modal">
+          <div className="modal-content">
+            <h3>{listening ? 'Listening...' : 'Click & Hold to Speak'}</h3>
+            <p>{interimText}</p> 
+          </div>
+        </div>
+      )}
       <p><strong>Full Spoken Text:</strong></p>
-      <p>{spokenText}</p> {/* Show accumulated spoken text */}
-      {listening && <p>Release to stop...</p>}
+      <p>{spokenText}</p> 
+      {listening && <p>Release 'F' to stop...</p>} */}
     </div>
   );
 };

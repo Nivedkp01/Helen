@@ -1,9 +1,10 @@
 import './App.css'
+import PdfViewer from './components/PdfViewer'
 import Navbar from './Navbar'
 import AboutUs from './Pages/AboutUs'
 import Learn from './Pages/Learn'
 import Notes from './Pages/Notes'
-import SpeechToTextWithResponse from './SpeechToTextWithResponse'
+// import SpeechToTextWithResponse from './SpeechToTextWithResponse'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 
 
@@ -18,6 +19,7 @@ function App() {
         <Route path="/notes" element={<Notes />} />
         <Route path="/learn" element={<Learn />} />
         <Route path="/about" element={<AboutUs />} />
+        <Route path="/pdf-viewer/:pdfPath" element={<PdfViewer />} />
       </Routes>
     </Router>
   )
