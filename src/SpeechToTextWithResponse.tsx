@@ -4,6 +4,7 @@ import TextToSpeech from './TextToSpeech';
 
 const SpeechToTextWithResponse = () => {
   const [spokenText, setSpokenText] = useState('');
+  
   const [responseText, setResponseText] = useState('');
 
   // Handle user input text to determine response
@@ -31,6 +32,13 @@ const SpeechToTextWithResponse = () => {
     setResponseText(response);  // Set the response text to be spoken back
   };
 
+  const handleCommandInput = (inputText: string) => {
+    setSpokenText(inputText); // Store the spoken text
+    const response = generateResponse(inputText);  // Generate response based on input
+    setResponseText(response);  // Set the response text to be spoken back
+  };
+
+
   // Use useEffect to trigger text-to-speech when responseText changes
   useEffect(() => {
     if (responseText) {
@@ -44,7 +52,7 @@ const SpeechToTextWithResponse = () => {
       <h2>Speech to Text with Response</h2>
 
       {/* Speech recognition component */}
-      <SpeechRecognition onSpeechRecognized={handleSpeechInput} />
+      <SpeechRecognition onSpeechRecognized={handleSpeechInput} onCommandRecognized={handleCommandInput}/>
 
       {/* Display spoken text */}
       <div>

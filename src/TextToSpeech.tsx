@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-const TextToSpeech = ({ text }: { text: string }) => {
+const TextToSpeech = ({ text,enabled }: { text: string, enabled:boolean }) => {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] =
     useState<SpeechSynthesisVoice | null>(null);
@@ -50,7 +50,10 @@ const TextToSpeech = ({ text }: { text: string }) => {
 
   useEffect(() => {
     if (text) {
-      speakText(text);
+      if(enabled){
+
+        speakText(text);
+      }
     }
   }, [text]);
 

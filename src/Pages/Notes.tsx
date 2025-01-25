@@ -129,7 +129,7 @@ const Notes = () => {
   return (
     <div className="p-6">
       {/* PDF Display Grid */}
-      <div className="grid grid-cols-6 gap-2 mb-6">
+      <div className="grid grid-cols-10 gap-2 mb-6">
         {pdfs.map((pdf, index) => (
           <div
             key={index}

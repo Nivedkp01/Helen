@@ -3,24 +3,19 @@ import axios from "axios";
 import SpeechRecognition from "../SpeechRecognition"; 
 import TextToSpeech from "../TextToSpeech"; 
 
-const Learn = () => {
+
+const Test = () => {
   const [pdfs, setPdfs] = useState<{ name: string; path: string }[]>([]);
   const [selectedPdf, setSelectedPdf] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
-  
   const [messages, setMessages] = useState<
     { text: string; sender: "user" | "computer" }[]
   >([]);
-
   const [replyText, setReplyText] = useState<string>(""); 
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [ttsSettings, setTtsSettings] = useState({
-    volume: 1, 
-    pitch: 1, 
-    rate: 1, 
-  });
-
-  const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(false); // State for the toggle functionality
+  const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(true); 
+  const [isLearning, setIsLearning] = useState<boolean>(false); // State to track if learning is in progress
+  const [question, setQuestion] = useState<string>(""); // Store the question
 
   useEffect(() => {
     const fetchPdfs = async () => {
@@ -42,56 +37,68 @@ const Learn = () => {
     setSelectedPdf(null);
   };
 
-  const handleCommand = ()=>{
-    if (inputValue.trim()) {
-        if(inputValue.includes("open")){
-          
-            setSelectedPdf(inputValue.split(" ")[inputValue.split(" ").indexOf("open")+1].toLowerCase())
-            
-        }
-    }
-  }
-  const handleSubmit = async () => {
-    if (inputValue.trim()) {
-      const currentPdf = selectedPdf || "nil"; 
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        { text: inputValue, sender: "user" },
-      ]);
-
+  const handleLearnClick = async () => {
+    if (selectedPdf) {
+      setIsLearning(true);
       try {
-        const response = await axios.post("http://localhost:5000/process", {
-          text: inputValue,
-          pdfName: currentPdf,
+        const response = await axios.post("http://localhost:5000/ask_question", {
+          pdfName: selectedPdf,
         });
-        const reply = response.data.reply || "Error processing input";
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          { text: reply, sender: "computer" },
-        ]);
-
-        setReplyText(reply); 
+        console.log("Backend response:", response.data);  // Log the response to check its structure
+  
+        const { reply } = response.data;  // Ensure 'reply' is extracted correctly
+  
+        if (reply) {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            { text: reply, sender: "computer" },  // Add reply to chat messages
+          ]);
+          setReplyText(reply);  // Optionally set reply text for text-to-speech
+        } else {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            { text: "Sorry, I couldn't get a response.", sender: "computer" },
+          ]);
+        }
       } catch (error) {
-        console.error("Error processing input:", error);
+        console.error("Error fetching question:", error);
         setMessages((prevMessages) => [
           ...prevMessages,
-          { text: "Error processing input", sender: "computer" },
+          { text: "Error fetching answer", sender: "computer" },
         ]);
-        setReplyText("Error processing input"); 
       }
+    }
+  };
 
+  const handleAnswerSubmit = async () => {
+    if (inputValue.trim()) {
+      try {
+        const response = await axios.post("http://localhost:5000/submit_answer", {
+          text: inputValue,
+          pdfName: selectedPdf,
+        });
+        const feedback = response.data.reply || "Error processing answer";
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { text: inputValue, sender: "user" },
+          { text: feedback, sender: "computer" },
+        ]);
+        setIsLearning(false); // Learning process is complete
+      } catch (error) {
+        console.error("Error submitting answer:", error);
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { text: "Error processing answer", sender: "computer" },
+        ]);
+      }
       setInputValue("");
     }
   };
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!isTtsEnabled) return; // Only allow key press actions if TTS is enabled
-
       if (event.key.toLowerCase() === "g") {
-        handleSubmit(); 
-      }else if(event.key.toLowerCase() === "d"){
-        handleCommand();
+        handleAnswerSubmit();
       }
     };
 
@@ -100,25 +107,10 @@ const Learn = () => {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [inputValue, isTtsEnabled]);
-
-  useEffect(() => {
-    const messagesEndRef = document.getElementById("messagesEnd");
-    if (messagesEndRef) {
-      messagesEndRef.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
+  }, [inputValue]);
 
   const handleSpeechRecognized = (text: string) => {
     setInputValue(text);
-  };
-
-
-  const handleTtsSettingsChange = (setting: string, value: number) => {
-    setTtsSettings((prevSettings) => ({
-      ...prevSettings,
-      [setting]: value,
-    }));
   };
 
   return (
@@ -188,37 +180,44 @@ const Learn = () => {
         </div>
           
         <div className="flex items-center space-x-2 mt-4">
-          <input
-            type="text"
-            className="w-full p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Type your message..."
-          />
-            
-          <button
-            onClick={handleSubmit}
-            className="px-6 py-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition duration-300"
-          >
-            Send
-          </button>
+          {isLearning ? (
+            <>
+              <input
+                type="text"
+                className="w-full p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="Type your answer..."
+              />
+              <button
+                onClick={handleAnswerSubmit}
+                className="px-6 py-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition duration-300"
+              >
+                Submit Answer
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleLearnClick}
+              className="px-6 py-3 bg-green-500 text-white rounded-full hover:bg-green-600 transition duration-300"
+            >
+              Learn
+            </button>
+          )}
         </div>
       </div>
 
       <SpeechRecognition onSpeechRecognized={handleSpeechRecognized} />
-
-      {/* Conditionally render TextToSpeech */}
-      <TextToSpeech text={replyText} enabled={isTtsEnabled}/>
+      <TextToSpeech text={replyText} enabled={isTtsEnabled} />
       
-      {/* Toggle button to enable/disable TTS */}
       <button
         className="fixed bottom-4 left-4 p-3 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition duration-300"
-        onClick={() => setIsTtsEnabled((prev) => !prev)} // Toggle TTS state
+        onClick={() => setIsTtsEnabled((prev) => !prev)}
       >
-        {isTtsEnabled ? "disable voice mode" : "enable voice mode"}
+        {isTtsEnabled ? "enable voice mode" : "disable voice mode"}
       </button>
     </div>
   );
 };
 
-export default Learn;
+export default Test;
