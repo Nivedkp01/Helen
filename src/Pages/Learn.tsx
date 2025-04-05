@@ -1,26 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
 import axios from "axios";
-import SpeechRecognition from "../SpeechRecognition"; 
-import TextToSpeech from "../TextToSpeech"; 
 
 const Learn = () => {
-  const [pdfs, setPdfs] = useState<{ name: string; path: string }[]>([]);
-  const [selectedPdf, setSelectedPdf] = useState<string | null>(null);
-  const [inputValue, setInputValue] = useState("");
-  
-  const [messages, setMessages] = useState<
-    { text: string; sender: "user" | "computer" }[]
-  >([]);
+  const { classname, subject, chapter } = useParams<{ classname: string; subject: string; chapter: string }>();
 
-  const [replyText, setReplyText] = useState<string>(""); 
-  const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [ttsSettings, setTtsSettings] = useState({
-    volume: 1, 
-    pitch: 1, 
-    rate: 1, 
-  });
+  const [pdfs, setPdfs] = useState([]);
+  const [selectedPdf, setSelectedPdf] = useState(`${classname}${subject}${chapter}`);
+  const [note, setNote] = useState("");
+  const [isTtsEnabled, setIsTtsEnabled] = useState(false);
+  const textAreaRef = useRef(null);
 
-  const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(false); // State for the toggle functionality
+  const storedUsername = localStorage.getItem("username") || "";
+  const title = `${selectedPdf}${storedUsername}`;
 
   useEffect(() => {
     const fetchPdfs = async () => {
@@ -29,100 +21,69 @@ const Learn = () => {
         setPdfs(response.data);
       } catch (error) {
         console.error("Error fetching PDFs:", error);
+        alert("Failed to load PDFs.");
       }
     };
     fetchPdfs();
   }, []);
 
-  const handlePdfClick = (pdfName: string) => {
-    setSelectedPdf(pdfName);
-  };
-
   const handleBackClick = () => {
     setSelectedPdf(null);
+    setNote("");
   };
 
-  const handleCommand = ()=>{
-    if (inputValue.trim()) {
-        if(inputValue.includes("open")){
-          
-            setSelectedPdf(inputValue.split(" ")[inputValue.split(" ").indexOf("open")+1].toLowerCase())
-            
-        }
-    }
-  }
-  const handleSubmit = async () => {
-    if (inputValue.trim()) {
-      const currentPdf = selectedPdf || "nil"; 
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        { text: inputValue, sender: "user" },
-      ]);
-
-      try {
-        const response = await axios.post("http://localhost:5000/process", {
-          text: inputValue,
-          pdfName: currentPdf,
-        });
-        const reply = response.data.reply || "Error processing input";
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          { text: reply, sender: "computer" },
-        ]);
-
-        setReplyText(reply); 
-      } catch (error) {
-        console.error("Error processing input:", error);
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          { text: "Error processing input", sender: "computer" },
-        ]);
-        setReplyText("Error processing input"); 
-      }
-
-      setInputValue("");
+  const handleSave = async () => {
+    try {
+      await axios.post("http://localhost:5000/saveNote", { title, note });
+      alert("Note saved successfully");
+    } catch (error) {
+      alert("Failed to save note. Please try again.");
+      console.error("Error saving note:", error);
     }
   };
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!isTtsEnabled) return; // Only allow key press actions if TTS is enabled
-
-      if (event.key.toLowerCase() === "g") {
-        handleSubmit(); 
-      }else if(event.key.toLowerCase() === "d"){
-        handleCommand();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [inputValue, isTtsEnabled]);
-
-  useEffect(() => {
-    const messagesEndRef = document.getElementById("messagesEnd");
-    if (messagesEndRef) {
-      messagesEndRef.scrollIntoView({ behavior: "smooth" });
+  const handleDownload = () => {
+    if (!note) {
+      alert("No note to download!");
+      return;
     }
-  }, [messages]);
-
-  const handleSpeechRecognized = (text: string) => {
-    setInputValue(text);
+    const blob = new Blob([note], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
+  const handleSearch = async () => {
+    if (!textAreaRef.current) return;
+    const selectedText = textAreaRef.current.value.substring(
+      textAreaRef.current.selectionStart || 0,
+      textAreaRef.current.selectionEnd || 0
+    ).trim();
 
-  const handleTtsSettingsChange = (setting: string, value: number) => {
-    setTtsSettings((prevSettings) => ({
-      ...prevSettings,
-      [setting]: value,
-    }));
+    if (!selectedText) {
+      alert("Please select text to search.");
+      return;
+    }
+
+    try {
+      const response = await axios.post("http://localhost:5000/process", {
+        text: selectedText,
+        pdfName: selectedPdf || "nil",
+      });
+      setNote((prev) => prev + "\n" + response.data.reply);
+    } catch (error) {
+      alert("Error fetching search results. Try again.");
+      console.error("Error processing input:", error);
+    }
   };
 
   return (
-    <div className="flex min-h-screen overflow-hidden relative bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       <div className="w-2/3 p-6 relative overflow-hidden">
         {selectedPdf && (
           <button
@@ -133,26 +94,7 @@ const Learn = () => {
           </button>
         )}
 
-        {!selectedPdf ? (
-          <div className="grid grid-cols-6 gap-4 mb-6">
-            {pdfs.map((pdf) => (
-              <div
-                key={pdf.path}
-                className="flex flex-col items-center cursor-pointer"
-                onClick={() => handlePdfClick(pdf.name)}
-              >
-                <img
-                  src="https://cdn-icons-png.flaticon.com/512/4726/4726010.png"
-                  alt="PDF Icon"
-                  className="w-16 h-16 mb-2"
-                />
-                <div className="text-xs font-medium text-gray-700">
-                  {pdf.name}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
+        {selectedPdf && (
           <iframe
             src={`http://localhost:5000/uploads/${selectedPdf}`}
             width="100%"
@@ -164,59 +106,34 @@ const Learn = () => {
         )}
       </div>
 
-      <div className="w-1/3 p-6 border-l flex flex-col justify-between overflow-hidden">
-        <h2 className="text-xl font-semibold mb-4">Chatbox</h2>
-        <div
-          className="flex-1 overflow-y-auto space-y-4 mb-4 pr-4"
-          style={{ maxHeight: "calc(100vh - 160px)" }}
-        >
-          {messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`p-4 max-w-xs rounded-lg ${
-                  msg.sender === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"
-                }`}
-              >
-                {msg.text}
-              </div>
-            </div>
-          ))}
-          <div id="messagesEnd" />
-        </div>
-          
-        <div className="flex items-center space-x-2 mt-4">
-          <input
-            type="text"
-            className="w-full p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Type your message..."
-          />
-            
+      <div className="w-1/2 p-6 border-l flex flex-col">
+        <div className="flex justify-between">
+          <h2 className="text-xl font-semibold">Notes</h2>
+          <button onClick={handleSave} className="bg-black mr-10 text-white px-4 py-2 rounded hover:bg-gray-300 hover:text-black">
+            Save
+          </button>
           <button
-            onClick={handleSubmit}
-            className="px-6 py-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition duration-300"
+            onClick={handleDownload}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 ml-4"
           >
-            Send
+            Download Note
           </button>
         </div>
+
+        <textarea
+          ref={textAreaRef}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="mt-4 bg-white w-full h-64 p-2 border rounded"
+        />
+
+        <button
+          onClick={handleSearch}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Search Selected Text
+        </button>
       </div>
-
-      <SpeechRecognition onSpeechRecognized={handleSpeechRecognized} />
-
-      {/* Conditionally render TextToSpeech */}
-      <TextToSpeech text={replyText} enabled={isTtsEnabled}/>
-      
-      {/* Toggle button to enable/disable TTS */}
-      <button
-        className="fixed bottom-4 left-4 p-3 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition duration-300"
-        onClick={() => setIsTtsEnabled((prev) => !prev)} // Toggle TTS state
-      >
-        {isTtsEnabled ? "disable voice mode" : "enable voice mode"}
-      </button>
     </div>
   );
 };

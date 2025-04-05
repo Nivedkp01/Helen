@@ -141,7 +141,7 @@ const Notes = () => {
             <div className="w-16 h-16 flex items-center justify-center mb-1">
               <img 
                 src="https://cdn-icons-png.flaticon.com/512/4726/4726010.png" // Use URL or local path here
-                alt="PDF Icon"
+                 alt="PDF Icon"
                 className="w-full h-full object-contain transition-transform duration-300 ease-in-out transform hover:scale-110" // Hover effect for enlarging
               />
             </div>
